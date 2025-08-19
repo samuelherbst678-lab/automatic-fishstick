@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Koalitionsrechner – Proportionale Sitzverteilung</title>
+<style>
+  :root {
+    --bg:#0b0f14; --card:#121823; --ink:#e8eef7; --muted:#a6b0bf;
+    --ok:#37d07a; --bad:#ff6a6a; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:32px; color:var(--ink);
+    font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Helvetica,Arial;
+    background:radial-gradient(1200px 800px at 80% -20%, #1b2b45 0%, #0b0f14 55%);
+  }
+  h1{margin:0 0 8px; font-size:clamp(20px,2.6vw,32px)}
+  p.sub{margin:0 0 24px; color:var(--muted)}
+  .wrap{display:grid; gap:16px; grid-template-columns:380px 1fr}
+  @media (max-width:980px){.wrap{grid-template-columns:1fr}}
+  .card{
+    background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.01));
+    border:1px solid rgba(255,255,255,.06);
+    border-radius:var(--radius); padding:16px;
+  }
+  .row{display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap}
+  .row>*{flex:1}
+  input,select,button{
+    border-radius:10px; border:1px solid rgba(255,255,255,.12);
+    background:#0f1420; color:var(--ink); padding:10px 12px;
+  }
+  input[type="color"]{padding:0; height:38px; width:100%}
+  button{cursor:pointer; font-weight:600}
+  button.secondary{background:#0f1420}
+  .party-row{
+    display:grid; grid-template-columns:26px 1.3fr .9fr .7fr 1fr 26px;
+    gap:8px; align-items:center; margin:8px 0;
+  }
+  .party-row .handle{opacity:.6; text-align:center; font-size:12px}
+  .party-row .del{opacity:.7; cursor:pointer; text-align:center}
+
+  .legend{display:flex; flex-wrap:wrap; gap:8px}
+  .legend .item{
+    display:flex; align-items:center; gap:8px; font-size:13px;
+    background:#0f1420; border:1px solid rgba(255,255,255,.08);
+    padding:6px 10px; border-radius:999px;
+  }
+  .sw{width:14px; height:14px; border-radius:4px; display:inline-block; border:1px solid rgba(255,255,255,.3)}
+  .pill{display:inline-flex; align-items:center; gap:8px; font-size:13px; padding:6px 10px; border-radius:999px; background:#0f1420; border:1px solid rgba(255,255,255,.08)}
+  .checklist{display:flex; flex-wrap:wrap; gap:10px}
+  .checklist label{display:flex; align-items:center; gap:8px; border:1px solid rgba(255,255,255,.08); padding:8px 10px; border-radius:999px; background:#0f1420}
+  .ok{color:var(--ok)} .bad{color:var(--bad)}
+  svg{display:block; width:100%; height:auto}
+  .arc{opacity:1; transition:opacity .25s ease, transform .25s ease}
+  .arc.enter{opacity:0; transform:scale(0.98)}
+  .arc.leave{opacity:0; transform:scale(1.02)}
+
+  /* Prognose-Chart: Balken klickbar */
+  #barChart rect { cursor: pointer; }
+  .bar-name { fill:#eaf2ff; font-weight:700; }
+  .bar-value { fill:#eaf2ff; font-weight:800; }
+</style>
+</head>
+<body>
+  <h1>Koalitionsrechner – Proportionale Sitzverteilung</h1>
+  <p class="sub">Halbkreis, Prognosebalken (dick, ohne Linien, weiße Labels) und Koalitions-Check</p>
+
+  <div class="wrap">
+    <!-- Input-Bereich -->
+    <section class="card" id="inputsCard">
+      <div class="row">
+        <div><label>Gesamtsitze</label><input id="totalSeats" type="number" value="630"></div>
+        <div><label>Sperrklausel (%)</label><input id="threshold" type="number" value="5" step="0.1"></div>
+      </div>
+      <div class="row">
+        <div><label>Wahlverfahren</label>
+          <select id="method">
+            <option value="sls" selected>Sainte-Laguë/Schepers</option>
+            <option value="dhondt">d’Hondt</option>
+            <option value="hare">Hare-Niemeyer</option>
+          </select>
+        </div>
+        <div><label>Ausnahmen (z. B. SSW)</label><input id="exceptions" placeholder="SSW"></div>
+      </div>
+      <div class="row" style="justify-content:space-between">
+        <button id="addRowBtn" type="button">+ Partei hinzufügen</button>
+        <div style="display:flex; gap:8px">
+          <button id="resetBtn" class="secondary" type="button">Zurücksetzen</button>
+          <button id="calcBtn" type="button">Neu berechnen</button>
+        </div>
+      </div>
+      <div id="partyList"></div>
+    </section>
+
+    <!-- Output-Bereich -->
+    <section class="card">
+      <!-- Sitzverteilung -->
+      <svg id="seatChart" viewBox="0 0 900 620" preserveAspectRatio="xMidYMin meet"></svg>
+      <div class="legend" id="legend"></div>
+      <div class="row" style="margin-top:12px">
+        <div class="pill"><strong>Mehrheitsschwelle:</strong> <span id="majorityLbl">316</span></div>
+        <div class="pill"><strong>Sitze Koalition:</strong> <span id="coalSeats">0</span></div>
+        <div class="pill"><strong>Mehrheit?</strong> <span id="coalMajority" class="bad">nein</span></div>
+      </div>
+      <!-- Koalitionscheck -->
+      <div class="card" style="margin-top:12px">
+        <h3 style="margin:0 0 8px">Koalitionen testen</h3>
+        <div class="checklist" id="coalitionChecklist"></div>
+      </div>
+      <!-- Prognose -->
+      <div class="card" style="margin-top:12px">
+        <h3 style="margin:0 8px 12px">Prognose</h3>
+        <svg id="barChart" viewBox="0 0 900 430"></svg>
+        <div class="row" style="margin-top:8px">
+          <button id="nextBarBtn"  type="button">Nächste Partei animieren</button>
+          <button id="animateBarsBtn" type="button">Alle Balken animieren</button>
+          <button id="resetBarsBtn" class="secondary" type="button">Reset</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+<script>
+/* ===== Helpers ===== */
+const $  = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+let selectedCoalition = new Set();
+const GREY = "#b7bdc7";
+
+/* „Andere“ robust erkennen */
+function isOther(name){
+  const n = (name||"").toString().trim().toLowerCase().replace(/\s+/g,"");
+  return n === "andere" || n === "sonstige";
+}
+
+/* ===== Defaults ===== */
+const defaultParties = [
+  {name:"CDU/CSU", color:"#000000", pct:28.0},
+  {name:"SPD",     color:"#E3000F", pct:17.0},
+  {name:"Grüne",   color:"#1FA12E", pct:12.0},
+  {name:"FDP",     color:"#FFED00", pct:6.0},
+  {name:"AfD",     color:"#009EE0", pct:20.0},
+  {name:"Linke",   color:"#BE3075", pct:6.0},
+  {name:"BSW",     color:"#FF6A00", pct:7.0}
+];
+
+/* ===== Inputs lesen + Party UI ===== */
+function readInputs(){
+  const totalSeats = parseInt($("#totalSeats").value) || 0;
+  const threshold  = parseFloat($("#threshold").value) || 0;
+  const method     = $("#method").value;
+  const exc        = ($("#exceptions").value || "").split(",").map(s => s.trim()).filter(Boolean);
+  const partyRows  = $$("#partyList .party-row");
+  const parties    = partyRows.map(row => ({
+    name: (row.querySelector(".pName").value || "").trim(),
+    color: row.querySelector(".pColor").value,
+    pct: parseFloat(row.querySelector(".pPct").value) || 0
+  }));
+  return {totalSeats, threshold, method, exceptions:exc, parties};
+}
+function addPartyRow(p = {name:"Neue Partei", color:"#8888ff", pct:0}){
+  const row = document.createElement("div");
+  row.className = "party-row";
+  row.innerHTML = `
+    <div class="handle">⋮⋮</div>
+    <input class="pName" type="text"   value="${p.name}">
+    <input class="pPct"  type="number" value="${p.pct}" step="0.1">
+    <input class="pColor" type="color" value="${p.color}">
+    <div class="del">✕</div>
+  `;
+  row.querySelector(".del").onclick = () => { row.remove(); calcAndRender(); };
+  $("#partyList").appendChild(row);
+  row.querySelectorAll("input").forEach(inp => inp.addEventListener("change", calcAndRender));
+}
+function setDefaults(){
+  $("#partyList").innerHTML = "";
+  defaultParties.forEach(addPartyRow);
+  calcAndRender();
+}
+
+/* ===== Sitzverteilung Algorithmen (Sainte-Laguë etc.) ===== */
+function filterByThreshold(parties, threshold, exceptions){
+  return parties.filter(p =>
+    !isOther(p.name) && p.pct > 0 && (p.pct >= threshold || exceptions.includes(p.name))
+  );
+}
+function sls(parties, seats){
+  const Q=[];
+  parties.forEach((p,i)=>{
+    const v=p.pct*1000; for(let k=0;k<seats+5;k++){ Q.push({i,val:v/(2*k+1)}) }
+  });
+  Q.sort((a,b)=>b.val-a.val);
+  const top=Q.slice(0,seats), c=new Array(parties.length).fill(0);
+  top.forEach(q=>c[q.i]++); return c;
+}
+function allocateSeats(parties, seats, method){
+  return sls(parties,seats); // (kann auf dhondt/hare erweitert werden)
+}
+function computeSeats(parties, seats, threshold, exceptions, method){
+  const clean = parties.map(p => isOther(p.name) ? {...p, pct:0} : p);
+  const ok = filterByThreshold(clean, threshold, exceptions);
+  const result = clean.map(p => ({...p, seats:0}));
+  if(ok.length===0) return result;
+  const counts = allocateSeats(ok, seats, method);
+  ok.forEach((p,idx)=>{
+    const j = result.findIndex(q=>q.name===p.name);
+    if(j>=0) result[j].seats=counts[idx];
+  });
+  return result;
+}
+
+/* ===== Halbkreis zeichnen ===== */
+function layoutArcs(data, totalSeats, selectedSet){
+  const isCoal = p => selectedSet && selectedSet.has(p.name);
+  const coalition = data.filter(p=>(p.seats||0)>0).filter(isCoal);
+  const others = data.filter(p=>(p.seats||0)>0).filter(p=>!isCoal(p));
+  const ordered=[...coalition,...others];
+  let total=ordered.reduce((a,b)=>a+(b.seats||0),0);
+  if(total===0) total=totalSeats;
+  let start=Math.PI;
+  return ordered.map(p=>{
+    const share=(p.seats||0)/total;
+    const sweep=share*Math.PI;
+    const arc={name:p.name,color:p.color,fill=isCoal(p)?p.color:GREY,start,end:start+sweep};
+    start+=sweep;
+    return arc;
+  });
+}
+function arcD(r1,r2,a0,a1){
+  const x0o=r1*Math.cos(a0),y0o=r1*Math.sin(a0);
+  const x1o=r1*Math.cos(a1),y1o=r1*Math.sin(a1);
+  const x1i=r2*Math.cos(a1),y1i=r2*Math.sin(a1);
+  const x0i=r2*Math.cos(a0),y0i=r2*Math.sin(a0);
+  return `M${x0o} ${y0o}A${r1} ${r1} 0 0 1 ${x1o} ${y1o}L${x1i} ${y1i}A${r2} ${r2} 0 0 0 ${x0i} ${y0i}Z`;
+}
+function drawHalfRing(svg,data,totalSeats,selectedSet){
+  const w=900,h=620,cx=w/2,cy=h*0.85;
+  const rOuter=260,rInner=80;
+  let g=svg.querySelector("g.seats");
+  if(!g){svg.innerHTML=""; g=document.createElementNS("http://www.w3.org/2000/svg","g");
+    g.setAttribute("transform",`translate(${cx},${cy})`);svg.appendChild(g);}
+  const arcs=layoutArcs(data,totalSeats,selectedSet);
+  g.innerHTML="";
+  arcs.forEach(arc=>{
+    const path=document.createElementNS("http://www.w3.org/2000/svg","path");
+    path.setAttribute("d",arcD(rOuter,rInner,arc.start,arc.end));
+    path.setAttribute("fill",arc.fill);
+    g.appendChild(path);
+  });
+  $("#majorityLbl").textContent=(Math.floor(totalSeats/2)+1).toString();
+}
+
+/* ===== Legend & Koalition ===== */
+function renderLegend(data){
+  const legend=$("#legend");legend.innerHTML="";
+  data.filter(p=>(p.seats||0)>0).forEach(p=>{
+    const el=document.createElement("div");el.className="item";
+    el.innerHTML=`<span class="sw" style="background:${p.color}"></span><strong>${p.name}</strong> – ${p.seats} Sitze`;
+    legend.appendChild(el);
+  });
+}
+function renderChecklist(data){
+  const wrap=$("#coalitionChecklist");wrap.innerHTML="";
+  data.filter(p=>(p.seats||0)>0).forEach(p=>{
+    const lab=document.createElement("label");
+    const checked=selectedCoalition.has(p.name)?"checked":"";
+    lab.innerHTML=`<input type="checkbox" data-name="${p.name}" ${checked}>
+      <span class="sw" style="background:${p.color}"></span>${p.name} (${p.seats})`;
+    wrap.appendChild(lab);
+  });
+  wrap.querySelectorAll("input[type=checkbox]").forEach(cb=>{
+    cb.addEventListener("change",()=>{
+      const n=cb.dataset.name;
+      if(cb.checked)selectedCoalition.add(n);else selectedCoalition.delete(n);
+      recomputeCoalitionSum();
+      drawHalfRing($("#seatChart"),window.__lastSeats||[],parseInt($("#totalSeats").value)||0,selectedCoalition);
+    });
+  });
+}
+function recomputeCoalitionSum(){
+  const totalSeats=parseInt($("#totalSeats").value)||0;
+  const majority=Math.floor(totalSeats/2)+1;
+  const data=window.__lastSeats||[];
+  const sum=data.reduce((a,p)=>a+(selectedCoalition.has(p.name)?(p.seats||0):0),0);
+  $("#coalSeats").textContent=sum;
+  const ok=sum>=majority;
+  $("#coalMajority").textContent=ok?"ja":"nein";
+  $("#coalMajority").className=ok?"ok":"bad";
+}
+
+/* ===== Prognose-BarChart (SVG, dicke Balken, weiße Namen + Werte oben) ===== */
+let barOrder = [];    // Reihenfolge (nach Prozent, absteigend)
+let barAnimated = []; // Flags, ob Balken bereits animiert
+let nextIndex = 0;    // für „Nächste Partei animieren“
+
+function drawBarChart(svg, parties){
+  const data = parties
+    .filter(p => p && p.name && !isOther(p.name) && (p.pct||0)>0)
+    .sort((a,b)=>(b.pct||0)-(a.pct||0));
+
+  barOrder   = data.map(d=>d.name);
+  barAnimated= data.map(_=>false);
+  nextIndex  = 0;
+
+  const w=900, h=430;
+  const margin={top:30,right:20,bottom:70,left:40};
+  const innerW=w-margin.left-margin.right;
+  const innerH=h-margin.top-margin.bottom;
+  svg.innerHTML="";
+
+  const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+  g.setAttribute("transform",`translate(${margin.left},${margin.top})`);
+  svg.appendChild(g);
+
+  const maxPct = Math.max(10, Math.ceil(Math.max(...data.map(d=>d.pct))+5));
+
+  // dickere Balken
+  const colWidth = innerW / data.length;
+  const barWidth = Math.min(74, colWidth*0.8);
+  const gap = colWidth - barWidth;
+
+  data.forEach((d,i)=>{
+    const x = i*colWidth + gap/2;
+    const y0 = innerH;
+    const targetH = d.pct / maxPct * innerH;
+
+    // Balken
+    const rect = document.createElementNS("http://www.w3.org/2000/svg","rect");
+    rect.setAttribute("x", x);
+    rect.setAttribute("y", y0);
+    rect.setAttribute("width", barWidth);
+    rect.setAttribute("height", 0);
+    rect.setAttribute("fill", d.color);
+    rect.dataset.index = i;
+    g.appendChild(rect);
+
+    // Prozentwert (oben außerhalb)
+    const val = document.createElementNS("http://www.w3.org/2000/svg","text");
+    val.setAttribute("x", x + barWidth/2);
+    val.setAttribute("y", y0 - targetH - 6); // Zielposition – wird während Animation angepasst
+    val.setAttribute("text-anchor","middle");
+    val.setAttribute("class","bar-value");
+    val.textContent = "";
+    g.appendChild(val);
+
+    // Parteiname (weiß, unten)
+    const name = document.createElementNS("http://www.w3.org/2000/svg","text");
+    name.setAttribute("x", x + barWidth/2);
+    name.setAttribute("y", innerH + 26);
+    name.setAttribute("text-anchor","middle");
+    name.setAttribute("class","bar-name");
+    name.textContent = d.name;
+    g.appendChild(name);
+
+    // Klick: nur dieser Balken animiert
+    rect.addEventListener("click", ()=> animateBar(i, rect, val, y0, targetH, d.pct));
+  });
+
+  // Buttons
+  $("#nextBarBtn").onclick = ()=> animateNextInOrder(g, data, innerH, maxPct, barWidth, colWidth, gap);
+  $("#animateBarsBtn").onclick = ()=> {
+    // Alle nacheinander
+    (function seq(j=0){
+      if(j>=data.length) return;
+      const x = j*colWidth + gap/2;
+      const rect = g.querySelector(`rect[data-index="${j}"]`);
+      const val  = g.querySelectorAll(".bar-value")[j];
+      const targetH = data[j].pct/maxPct*innerH;
+      animateBar(j, rect, val, innerH, targetH, data[j].pct, ()=>seq(j+1));
+    })();
+  };
+  $("#resetBarsBtn").onclick = ()=> {
+    nextIndex = 0;
+    barAnimated = data.map(_=>false);
+    g.querySelectorAll("rect").forEach(r=>{
+      r.setAttribute("y", innerH);
+      r.setAttribute("height", 0);
+    });
+    g.querySelectorAll(".bar-value").forEach(v=> v.textContent="");
+  };
+}
+
+function animateNextInOrder(g, data, innerH, maxPct, barWidth, colWidth, gap){
+  // nächsten nicht-animierten Index suchen
+  while(nextIndex < data.length && barAnimated[nextIndex]) nextIndex++;
+  if(nextIndex >= data.length) return;
+  const j = nextIndex;
+  const rect = g.querySelector(`rect[data-index="${j}"]`);
+  const val  = g.querySelectorAll(".bar-value")[j];
+  const targetH = data[j].pct/maxPct*innerH;
+  animateBar(j, rect, val, innerH, targetH, data[j].pct, ()=>{ nextIndex++; });
+}
+
+function animateBar(idx, rect, valText, yBase, targetH, pct, done){
+  if(!rect || barAnimated[idx]){ if(done) done(); return; }
+  barAnimated[idx] = true;
+  let start=null;
+  const dur = 900; // ms
+  function tick(ts){
+    if(!start) start=ts;
+    const t = Math.min(1, (ts-start)/dur);
+    const hNow = targetH * t;
+    rect.setAttribute("y", yBase - hNow);
+    rect.setAttribute("height", hNow);
+    valText.setAttribute("y", yBase - hNow - 6);
+    valText.textContent = (pct * t).toFixed(1).replace(".", ",") + " %";
+    if(t < 1) requestAnimationFrame(tick);
+    else { valText.textContent = pct.toFixed(1).replace(".", ",") + " %"; if(done) done(); }
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ===== Main Berechnung + Render ===== */
+function calcAndRender(){
+  const {totalSeats,threshold,method,exceptions,parties}=readInputs();
+  const seatData=computeSeats(parties,totalSeats,threshold,exceptions,method);
+  window.__lastSeats=seatData;
+  drawHalfRing($("#seatChart"),seatData,totalSeats,selectedCoalition);
+  renderLegend(seatData);
+  renderChecklist(seatData);
+  recomputeCoalitionSum();
+  drawBarChart($("#barChart"),parties);
+}
+
+/* ===== Events ===== */
+$("#addRowBtn").onclick=()=>{ addPartyRow(); calcAndRender(); };
+$("#resetBtn").onclick=setDefaults;
+$("#calcBtn").onclick=calcAndRender;
+
+/* Start */
+setDefaults();
+</script>
+</body>
+</html>
