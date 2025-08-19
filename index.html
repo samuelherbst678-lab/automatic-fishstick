@@ -84,7 +84,7 @@
 </head>
 <body>
   <h1>Koalitionsrechner – Proportionale Sitzverteilung</h1>
-  <p class="sub">Koalitionen testen, Historik 1949–2025. Prognose-Overlay: ARD‑artige Säulen (einzeln klickbar), Halbkreis mit Sitzverteilung.</p>
+  <p class="sub">Koalitionen testen, Historik 1949–2025. Prognose-Overlay: ARD-artige Säulen, per Klick fährt die angeklickte Partei hoch.</p>
 
   <div class="wrap">
     <!-- Eingaben -->
@@ -196,7 +196,7 @@
   "1987":[{"name":"CDU/CSU","pct":44.3,"color":"#000000"},{"name":"SPD","pct":37.0,"color":"#E3000F"},{"name":"FDP","pct":9.1,"color":"#FFED00"},{"name":"Grüne","pct":8.3,"color":"#1FA12E"}],
   "1990":[{"name":"CDU/CSU","pct":43.8,"color":"#000000"},{"name":"SPD","pct":33.5,"color":"#E3000F"},{"name":"FDP","pct":11.0,"color":"#FFED00"},{"name":"Grüne/B90","pct":5.1,"color":"#1FA12E"},{"name":"PDS","pct":2.4,"color":"#BE3075"},{"name":"REP","pct":2.1,"color":"#777777"}],
   "1994":[{"name":"CDU/CSU","pct":41.4,"color":"#000000"},{"name":"SPD","pct":36.4,"color":"#E3000F"},{"name":"FDP","pct":6.9,"color":"#FFED00"},{"name":"Grüne/B90","pct":7.3,"color":"#1FA12E"},{"name":"PDS","pct":4.4,"color":"#BE3075"}],
-  "1998":[{"name":"SPD","pct":40.9,"color":"#E3000F"},{"name":"CDU/CSU","pct":35.1,"color":"#000000"},{"name":"FDP","pct":6.2,"color":"#FFED00"},{"name":"Grüne/B90","pct":6.7,"color":"#1FA12E"},{"name":"PDS","pct":5.1,"color":"#BE3075"}],
+  "1998":[{\n    "name":"SPD","pct":40.9,"color":"#E3000F"},{"name":"CDU/CSU","pct":35.1,"color":"#000000"},{"name":"FDP","pct":6.2,"color":"#FFED00"},{"name":"Grüne/B90","pct":6.7,"color":"#1FA12E"},{"name":"PDS","pct":5.1,"color":"#BE3075"}],
   "2002":[{"name":"SPD","pct":38.5,"color":"#E3000F"},{"name":"CDU/CSU","pct":38.5,"color":"#000000"},{"name":"FDP","pct":7.4,"color":"#FFED00"},{"name":"Grüne/B90","pct":8.6,"color":"#1FA12E"},{"name":"PDS","pct":4.0,"color":"#BE3075"}],
   "2005":[{"name":"CDU/CSU","pct":35.2,"color":"#000000"},{"name":"SPD","pct":34.2,"color":"#E3000F"},{"name":"FDP","pct":9.8,"color":"#FFED00"},{"name":"Grüne/B90","pct":8.1,"color":"#1FA12E"},{"name":"Linke/PDS","pct":8.7,"color":"#BE3075"}],
   "2009":[{"name":"CDU/CSU","pct":33.8,"color":"#000000"},{"name":"SPD","pct":23.0,"color":"#E3000F"},{"name":"FDP","pct":14.6,"color":"#FFED00"},{"name":"Grüne/B90","pct":10.7,"color":"#1FA12E"},{"name":"Linke","pct":11.9,"color":"#BE3075"}],
@@ -319,7 +319,7 @@ function computeSeats(parties,seats,threshold,exceptions,method){
   return result;
 }
 
-/* Zeichnen & Layout */
+/* Zeichnen & Layout (Halbkreis) */
 function layoutArcs(data,total,sel){
   const coal = data.filter(p=>p.seats>0 && sel.has(p.name));
   const rest = data.filter(p=>p.seats>0 && !sel.has(p.name));
@@ -328,7 +328,7 @@ function layoutArcs(data,total,sel){
   let start = Math.PI;
   return ordered.map(p=>{
     const sweep = (p.seats/sum)*Math.PI;
-    const arc = {name:p.name, fill: sel.has(p.name)?p.color:GREY, start, end:start+sweep};
+    const arc = {name:p.name, color:p.color, fill: sel.has(p.name)?p.color:GREY, start, end:start+sweep};
     start += sweep;
     return arc;
   });
@@ -499,13 +499,13 @@ $("#loadFileBtn").addEventListener("click", async ()=>{
 setDefaults();
 </script>
 
-<!-- ===== ARD-Prognose OVERLAY – NUR SÄULEN, per Klick animiert ===== -->
+<!-- ===== ARD-Prognose OVERLAY – Säulen, per Klick die angeklickte Partei animieren ===== -->
 <div id="forecastOverlay" class="ard-overlay">
   <div class="ard-panel">
     <div class="ard-head">
       <div>
         <div class="ard-title">Prognose – ARD-Stil (inoffiziell)</div>
-        <div class="ard-sub">Basis: deine aktuellen Eingaben – Säulen wachsen pro Klick</div>
+        <div class="ard-sub">Klicke auf eine Säule/Partei, um sie hochfahren zu lassen</div>
       </div>
       <button class="ard-btn" id="closeForecast">Schließen</button>
     </div>
@@ -518,16 +518,16 @@ setDefaults();
 
     <div class="ard-foot">
       <button class="ard-btn secondary" id="resetBars">⟲ Reset</button>
-      <button class="ard-btn" id="nextBarBtn">Alle Balken animieren</button>
+      <button class="ard-btn" id="openTip" title="Tipp: Klick direkt auf die gewünschte Partei">Klick-Tipp</button>
     </div>
   </div>
 </div>
 
 <script>
-/* ===== Prognose-Overlay (Chart.js) – Säulen wachsen, einzeln klickbar ===== */
+/* ===== Prognose-Overlay (Chart.js) – Säulen wachsen bei Klick auf die jeweilige Partei ===== */
 let forecastChart = null;
-let forecastIndex = 0;    // für „Alle animieren“
-let forecastList  = [];   // {name, color, pct, shownPct}
+let forecastList  = [];
+let animating     = false;
 
 const commaDe = x => Number(x||0).toFixed(1).replace(".", ",");
 
@@ -540,12 +540,14 @@ document.getElementById("closeForecast").addEventListener("click", ()=> {
   document.getElementById("forecastOverlay").style.display="none";
 });
 document.getElementById("resetBars").addEventListener("click", resetForecast);
-document.getElementById("nextBarBtn").addEventListener("click", animateAllSequential);
+document.getElementById("openTip").addEventListener("click", ()=>{
+  alert("Tipp: Klicke im Chart auf die gewünschte Partei/Säule, um sie animiert hochzufahren.");
+});
 
-// Daten aus aktuellen Eingaben holen
+// Daten aus aktuellen Eingaben holen (Reihenfolge = nach Prozent, absteigend)
 function buildForecastData(){
   const inp = readInputs();
-  forecastList = inp.parties
+  forecastList = (inp.parties||[])
     .filter(p=>p && p.name && !isOther(p.name) && (p.pct||0)>0)
     .sort((a,b)=>(b.pct||0)-(a.pct||0))
     .map(p=>({...p, shownPct:0}));
@@ -559,7 +561,7 @@ function openForecast(){
   resetForecast();
 }
 
-// Chart aufsetzen: dicke Balken, KEIN Rand, KEINE Grid-Linien, Labels oben/weiß
+// Chart aufsetzen (dicke Balken, kein Rand, Labels außen, weiß; keine Grid-Linien)
 function initForecastChart(){
   const ctx = document.getElementById("forecastChart");
   if (forecastChart) { forecastChart.destroy(); }
@@ -571,104 +573,108 @@ function initForecastChart(){
         label: "Prognose",
         data: forecastList.map(p => p.shownPct),
         backgroundColor: forecastList.map(p => p.color),
-        borderWidth: 0,               // <- kein Rand
-        barThickness: 70,             // <- dickere Balken
-        maxBarThickness: 80,
-        categoryPercentage: 0.7,
-        barPercentage: 0.95
+        borderWidth: 0,               // kein weißer Rand
+        barThickness: 78,             // dicke Balken
+        maxBarThickness: 86,
+        categoryPercentage: 0.60,     // enger zusammen
+        barPercentage: 1.0
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      animation: false,               // wir animieren manuell
-      layout: { padding: { top: 24 } }, // Platz für Labels oben
+      animation: false,               // manuelle Animation
       plugins: {
         legend: { display: false },
         datalabels: {
-          color: "#ffffff",           // Prozentwerte weiß
+          color: "#ffffff",
           anchor: "end",
-          align: "top",               // außerhalb über dem Balken
-          offset: 6,
+          align: "end",
+          offset: 10,                 // außerhalb über dem Balken
           font: { weight: "bold", size: 16 },
           formatter: (value) => value > 0 ? commaDe(value) + " %" : ""
         },
-        tooltip: { enabled: false }
+        tooltip: {
+          callbacks: {
+            label: (ctx)=> `${ctx.label}: ${commaDe(forecastList[ctx.dataIndex].pct)} %`
+          }
+        }
       },
       scales: {
         x: {
-          grid: { display: false },   // <- keine Linien
-          ticks: { color: "#ffffff", font: { weight: "bold", size: 14 } } // Parteinamen weiß
+          grid: { display: false },
+          ticks: { color: "#ffffff", font: { weight: "bold", size: 14 } }
         },
         y: {
           beginAtZero: true,
           suggestedMax: Math.max(30, Math.ceil(Math.max(...forecastList.map(p=>p.pct)) + 5)),
-          grid: { display: false },   // <- keine Linien
-          ticks: { display: false }   // Y-Achse komplett aus
+          grid: { display:false },
+          ticks: { color:"#ffffff", font:{ size: 12 }, callback: v => v + "%" }
         }
       },
-      onClick: (evt) => {             // Einzeln per Klick animieren
-        const points = forecastChart.getElementsAtEventForMode(evt, 'nearest', {intersect: true}, true);
-        if (!points || !points.length) return;
-        const idx = points[0].index;
-        animateBarAt(idx);
-      }
+      onClick: (evt) => handleChartClick(evt)   // <- Klick-Handling
     },
     plugins: [ChartDataLabels]
   });
+
+  // Zusätzlich direkt auf das Canvas hören (robust gegen unterschiedliche Hit-Modes)
+  forecastChart.canvas.addEventListener('click', handleChartClick);
 }
 
 // Reset: alles auf 0%
 function resetForecast(){
-  forecastIndex = 0;
+  animating = false;
   forecastList.forEach(p => p.shownPct = 0);
-  forecastChart.data.datasets[0].data = forecastList.map(p=>0);
-  forecastChart.update();
-}
-
-// Eine einzelne Säule animieren (auf Klick)
-function animateBarAt(index){
-  const p = forecastList[index];
-  if (!p) return;
-  const already = p.shownPct >= p.pct; // schon durchgelaufen?
-  const startVal = already ? p.pct : 0;
-  const target = p.pct;
-  let step = 0;
-  const steps = 30;
-  const timer = setInterval(()=>{
-    step++;
-    const cur = startVal + (target - startVal) * (step/steps);
-    p.shownPct = cur;
-    forecastChart.data.datasets[0].data[index] = cur;
-    forecastChart.update();
-    if (step >= steps){
-      forecastChart.data.datasets[0].data[index] = target;
-      forecastChart.update();
-      clearInterval(timer);
-    }
-  }, 40);
-}
-
-// Alle Balken nacheinander animieren (Button)
-function animateAllSequential(){
-  resetForecast();
-  let i = 0;
-  function next(){
-    if (i >= forecastList.length) return;
-    let step=0, steps=30, target=forecastList[i].pct;
-    const timer = setInterval(()=>{
-      step++;
-      const cur = target * (step/steps);
-      forecastList[i].shownPct = cur;
-      forecastChart.data.datasets[0].data[i] = cur;
-      forecastChart.update();
-      if(step>=steps){
-        clearInterval(timer);
-        i++; next();
-      }
-    }, 40);
+  if (forecastChart){
+    forecastChart.data.labels = forecastList.map(p=>p.name);
+    forecastChart.data.datasets[0].backgroundColor = forecastList.map(p=>p.color);
+    forecastChart.data.datasets[0].data = forecastList.map(()=>0);
+    forecastChart.update('none');
   }
-  next();
+}
+
+// Utility: animiere eine einzelne Säule mit requestAnimationFrame
+function animateBarTo(index, target, duration=900){
+  return new Promise(resolve=>{
+    const startVal = forecastList[index].shownPct || 0;
+    const delta = target - startVal;
+    if (delta <= 0) { // schon voll oder drüber
+      forecastChart.data.datasets[0].data[index] = target;
+      forecastChart.update('none');
+      resolve();
+      return;
+    }
+    const start = performance.now();
+    function tick(now){
+      const t = Math.min(1, (now - start)/duration);
+      const cur = startVal + delta * t;
+      forecastList[index].shownPct = cur;
+      forecastChart.data.datasets[0].data[index] = cur;
+      forecastChart.update('none');
+      if (t < 1) requestAnimationFrame(tick);
+      else {
+        forecastChart.data.datasets[0].data[index] = target;
+        forecastList[index].shownPct = target;
+        forecastChart.update('none');
+        resolve();
+      }
+    }
+    requestAnimationFrame(tick);
+  });
+}
+
+// Klick-Handler: finde die angeklickte Säule und animiere nur diese
+async function handleChartClick(evt){
+  if (!forecastChart || animating) return;
+  // „nearest“ + intersect=true → exakt angeklickte Bar
+  const elems = forecastChart.getElementsAtEventForMode(evt, 'nearest', {intersect:true}, true);
+  if (!elems || !elems.length) return;
+  const idx = elems[0].index;
+  const target = forecastList[idx].pct || 0;
+  if ((forecastList[idx].shownPct||0) >= target) return; // bereits voll
+  animating = true;
+  await animateBarTo(idx, target, 900);
+  animating = false;
 }
 </script>
 
